@@ -19,8 +19,8 @@ def get_pdf_text(pdf_docs):
     logger.info(f"Extracted text from {len(pdf_docs)} PDF(s)")
     return text
 
-def get_text_chunks(text):
-    text_splitter = CharacterTextSplitter(
+def get_text_chunks(text):                  # feeding them to a language model or storing them in a vector database, you can't pass the whole document at once — it's too big!
+    text_splitter = CharacterTextSplitter(  # A list of strings, where each string is a "chunk" of the original input text:
         separator="\n",
         chunk_size=1000,
         chunk_overlap=200,
@@ -30,7 +30,11 @@ def get_text_chunks(text):
     logger.info(f"Split text into {len(chunks)} chunks")
     return chunks
 
-def get_vectorstore(chunks):
+def get_vectorstore(chunks):        # Each text chunk will be converted into a high-dimensional vector
+    """it's a Python object representing a FAISS index. Internally, it contains:
+    The text chunks (as metadata)
+T   heir embeddings (vectors)
+    A search index for fast similarity search"""
     # embeddings = OpenAIEmbeddings()
     try:
         embeddings = HuggingFaceEmbeddings(model_name="all-mpnet-base-v2")
@@ -41,12 +45,19 @@ def get_vectorstore(chunks):
     return vectorstore
 
 def build_conversational_rag_chain(vectorstore):
-    """Build a conversation chain with memory and retrieval"""
+    """Build a conversation chain with memory and retrieval
+    """
     
     # Initialize free local LLM (Ollama)
-    llm = Ollama(model="mistral")
+    llm = Ollama(model="mistral")                           # Loads a local LLM model (Mistral) via Ollama.
     
     # First we need a prompt that can pass the chat history into the retriever
+    """
+    Takes in the chat history
+    Appends the user's latest question ({input})
+    Asks the LLM to generate a better search query for retrieving documents
+    messageplaceholder Hey, I’m going to give you a list of chat messages in chat_history, so please insert them here into the final prompt.”
+    """
     contextualize_q_prompt = ChatPromptTemplate.from_messages([
         MessagesPlaceholder(variable_name="chat_history"),
         ("user", "{input}"),
@@ -54,11 +65,18 @@ def build_conversational_rag_chain(vectorstore):
     ])
     
     # Create the history-aware retriever
+    """
+    This turns your FAISS vector store into a searchable retriever.
+    It can now accept a string and return similar chunks
+    But: it only uses the raw input by default
+    """
     retriever = vectorstore.as_retriever()
     history_aware_retriever = create_history_aware_retriever(
         llm, retriever, contextualize_q_prompt
     )
-    
+    """
+    Refines the Answer: It allows the assistant to answer in context and refer back to what has already been said, which is important for consistency.
+    """
     # Create the prompt for answering with context
     qa_prompt = ChatPromptTemplate.from_messages([
         ("system", """Answer the user's questions based on the below context. 
@@ -70,6 +88,6 @@ def build_conversational_rag_chain(vectorstore):
     
     # Create the question answering chain
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
-    # Combine with retriever
+    # Combine with retriever to make it like a loop
     rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
     return rag_chain

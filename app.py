@@ -1,17 +1,16 @@
+# Streamlit is an open-source Python library that makes it super easy to build interactive web apps for data science and machine learning projects
 import streamlit as st
 from chat_engine import get_pdf_text, get_text_chunks, get_vectorstore, build_conversational_rag_chain
 def handle_userinput(user_question):
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
     response = st.session_state.rag_chain.invoke({                  # Invoke the chain
-        "input": user_question,
-        "chat_history": st.session_state.chat_history
+        "input": user_question,                                     # Sends the user input (user_question) to the RAG chain.
+        "chat_history": st.session_state.chat_history               # Also sends the existing chat_history so the chain can consider previous context.
     })
-    st.session_state.chat_history.extend([                          # Update chat history
-        {"role": "user", "content": user_question},
-        {"role": "assistant", "content": response["answer"]}
+    st.session_state.chat_history.extend([                          # Update chat history, extend() adds both messages in one go.
+        {"role": "user", "content": user_question},                 # The user's message.
+        {"role": "assistant", "content": response["answer"]}        # The assistant’s (AI) response.
     ])
-    for message in st.session_state.chat_history:                   # Display chat history
+    for message in st.session_state.chat_history:                   # Display chat history,Loops through the entire chat history.
         if message["role"] == "user":
             st.text_area("User", message["content"], height=100)
         else:
@@ -19,6 +18,7 @@ def handle_userinput(user_question):
 
 def main():
     st.set_page_config(page_title="chat with pdfs", page_icon=":guardsman:")
+    # Streamlit apps run top-to-bottom every time a user interacts with a widget, so without session_state, variables would reset on every interaction.
     if "rag_chain" not in st.session_state:
         st.session_state.rag_chain = None
     if "chat_history" not in st.session_state:
